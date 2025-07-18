@@ -1,0 +1,367 @@
+<!DOCTYPE HTML>
+<html>
+    <html><head><title>Risk Assessment</title><meta charset="utf-8"><meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="assets/css/main.css"></head><body class="landing"></body>
+    <!-- Header -->
+    <header id="header" class="alt"><h1><strong></h1>
+        <nav id="nav"><ul><li><a href="index.html">Home</a></li>
+            <li><a href="earthquakegraphvisualization.html">Graph</a></li>
+            <li><a href="riskassessment.html">Risk Assessment</a></li>
+            <li><a href="bayalert.html">BayAlert AI</a></li>
+          </ul></nav></header><a href="#menu" class="navPanelToggle"><span class="fa fa-bars"></span></a>
+  
+  <br><br><br><br>
+  
+<head>
+    <title>Bay Area Disaster Risk Assessment</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: rgb(32, 32, 32); color: #ddd; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    
+        header h1 { margin: 0; text-align: center; }
+        .input-section { background-color: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .input-group { display: flex; margin-bottom: 15px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 4px 0 0 4px; font-size: 16px; }
+        button { padding: 12px 25px; background-color: #3d3d3d; color: #3d3d3d; border: none; border-radius: 0 4px 4px 0; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button:hover { background-color: #2a2b3d; }
+        .results-section { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px; }
+        .map-container, .chart-container { flex: 1; min-width: 300px; background-color: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; }
+        #map { height: 450px; width: 100%; border-radius: 4px; }
+        /* You might want to add a max-height to .chart-container if maintainAspectRatio:true alone isn't enough */
+        /* For example:
+        .chart-container {
+            max-height: 400px; // Or a height that suits your layout
+        }
+        */
+        .risk-summary { background-color: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .risk-item { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .risk-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0;}
+        .risk-level { display: inline-block; padding: 5px 10px; border-radius: 4px; color: white; font-weight: bold; }
+        .high { background-color: #e74c3c; }
+        .medium { background-color: #f39c12; }
+        .low { background-color: #3498db; }
+        .legend { background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); line-height: 24px; }
+        .legend i { width: 18px; height: 18px; float: left; margin-right: 8px; opacity: 0.7; }
+        .loading { text-align: center; padding: 20px; display: none; }
+        .loading img { width: 50px; height: 50px; }
+        .small-print { font-size: 0.9em; font-style: italic; color: #7f8c8d; }
+        footer { background-color: #292929; color: white; padding: 20px 0; text-align: center; margin-top: 30px; }
+        @media (max-width: 768px) { .results-section { flex-direction: column; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="input-section">
+            <h2>Enter Your ZIP Code</h2>
+            <p>Get a personalized assessment of natural disaster risks in your area.</p>
+            <div class="input-group">
+                <input type="text" id="zipcode" placeholder="Enter ZIP code (e.g., 94568)">
+                <button onclick="checkRisk()">Check Risk</button>
+            </div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <p>Analyzing risk data...</p>
+            <img src="https://i.gifer.com/ZKZg.gif" alt="Loading">
+        </div>
+        
+        <div class="results-section" id="results-section" style="display: none;">
+            <div class="map-container">
+                <h2>Risk Map</h2>
+                <div id="map"></div>
+            </div>
+            <div class="chart-container">
+                <h2>Risk Comparison</h2>
+                <canvas id="riskChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="risk-summary" id="riskSummary" style="display: none;">
+            <h2>Risk Assessment Summary</h2>
+            <p>Loading your personalized risk assessment...</p>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>Data updated: May 13, 2025 | Powered by Hack Club AI API</p>
+            <p>Evacuation and alert information provided via links to official County Emergency Services.</p>
+            <p>This tool is for educational purposes only. Always consult official sources for emergency planning.</p>
+        </div>
+    </footer>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const countyEvacuationInfo = {
+            "Alameda": { countyName: "Alameda County", zoneSystemName: "Genasys Protect (Zonehaven)", zoneSystemUrl: "https://community.zonehaven.com/"},
+            "Contra Costa": { countyName: "Contra Costa County", zoneSystemName: "Genasys Protect (CWS)", zoneSystemUrl: "https://cwsalerts.com/know-your-zone/", alertSystemName: "Community Warning System (CWS)", alertSystemUrl: "https://cwsalerts.com/" },
+            "Marin": { countyName: "Marin County", zoneSystemName: "Genasys Protect (Zonehaven)", zoneSystemUrl: "https://community.zonehaven.com/",  alertSystemName: "Alert Marin", alertSystemUrl: "https://www.marinsheriff.org/services/emergency-services/alert-marin" },
+            "San Francisco": { countyName: "San Francisco County", evacInfoText: "San Francisco provides specific hazard maps (e.g., tsunami, flood) and preparedness information. Check official SFDEM resources.", zoneSystemName: "SF72.org (Preparedness Resources)", zoneSystemUrl: "https://www.sf72.org/", additionalLinks: [{ name: "Tsunami Hazard Maps", url: "https://www.conservation.ca.gov/cgs/tsunami/maps/san-francisco" }, { name: "Flood Risk Maps (SFPUC)", url: "https://www.sfpuc.org/learning/emergency-preparedness/flood-maps" }], alertSystemName: "AlertSF", alertSystemUrl: "https://www.sfdem.org/alertsf" },
+            "San Mateo": { countyName: "San Mateo County", zoneSystemName: "Genasys Protect (Zonehaven)", zoneSystemUrl: "https://community.zonehaven.com/", alertSystemName: "SMC Alert", alertSystemUrl: "https://www.smcalert.info/" },
+            "Santa Clara": { countyName: "Santa Clara County", zoneSystemName: "Genasys Protect (Zonehaven)", zoneSystemUrl: "https://protect.genasys.com/", alertSystemName: "AlertSCC", alertSystemUrl: "https://oem.sccgov.org/alertscc-opt-search" }
+        };
+        
+        let map, currentMarker, riskChart;
+        
+        document.addEventListener('DOMContentLoaded', initMap);
+        
+        function initMap() {
+            map = L.map('map').setView([37.8, -122.4], 8); // Default to wider Bay Area view
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 18
+            }).addTo(map);
+            
+            const legend = L.control({position: 'bottomright'});
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'legend');
+                div.innerHTML = '<h4>Hazard Risk Areas</h4><i style="background:#3388ff"></i> Flood Zones<br><i style="background:#ff4444"></i> Earthquake Zones<br><i style="background:#ff8800"></i> Wildfire Zones<br>';
+                return div;
+            };
+            legend.addTo(map);
+        }
+        
+        function getCountyFromZip(zipCode, locationName = '') {
+            if (zipCode.startsWith("941")) return "San Francisco";
+            if (zipCode === "94568" || zipCode === "94501" || zipCode === "94502" || zipCode.startsWith("946") || zipCode.startsWith("947")) return "Alameda";
+            if (zipCode.startsWith("940") || zipCode.startsWith("944") || (zipCode.startsWith("943") && zipCode !== "94301")) return "San Mateo";
+            if (zipCode.startsWith("945") && !(zipCode === "94501" || zipCode === "94502" || zipCode === "94568")) return "Contra Costa";
+            if (zipCode.startsWith("949")) return "Marin";
+            if (zipCode.startsWith("950") || zipCode.startsWith("951") || zipCode === "94301") return "Santa Clara";
+
+            if (locationName) {
+                const nameLower = locationName.toLowerCase();
+                if (nameLower.includes("san francisco")) return "San Francisco";
+                if (nameLower.includes("alameda") || nameLower.includes("dublin") || nameLower.includes("oakland") || nameLower.includes("berkeley")) return "Alameda";
+                if (nameLower.includes("san jose") || nameLower.includes("saratoga") || nameLower.includes("palo alto") || nameLower.includes("santa clara")) return "Santa Clara";
+                if (nameLower.includes("san rafael") || nameLower.includes("marin")) return "Marin";
+                if (nameLower.includes("foster city") || nameLower.includes("san mateo") || nameLower.includes("daly city")) return "San Mateo";
+                if (nameLower.includes("walnut creek") || nameLower.includes("concord") || nameLower.includes("richmond")) return "Contra Costa";
+            }
+            return null;
+        }
+
+        function checkRisk() {
+            const zipCode = document.getElementById('zipcode').value.trim();
+            if (!zipCode) { alert("Please enter a ZIP code"); return; }
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-section').style.display = 'none';
+            const riskSummaryEl = document.getElementById('riskSummary');
+            riskSummaryEl.style.display = 'none';
+            riskSummaryEl.innerHTML = '<h2>Risk Assessment Summary</h2><p>Loading your personalized risk assessment...</p>';
+            
+            const prompt = `
+                I need a detailed natural disaster risk assessment for ZIP code ${zipCode}.
+                Please provide the following information in JSON format:
+                1. Location name (city, neighborhood, e.g., "Dublin, CA")
+                2. Latitude
+                3. Longitude
+                4. Flood risk (score from 0-100)
+                5. Earthquake risk (score from 0-100)
+                6. Wildfire risk (score from 0-100)
+                7. A brief description of each risk specific to this location (flood, earthquake, wildfire)
+                8. Expected annual loss estimate (e.g., "$X.XM")
+                9. Social vulnerability level (e.g., "Low", "Relatively Low", "Medium", "Relatively High", "High")
+                10. Community resilience level (e.g., "Low", "Relatively Low", "Medium", "Relatively High", "High")
+                Format the response as valid JSON like this example (use actual data for ${zipCode}):
+                {"name": "Dublin, CA", "lat": 37.7021, "lng": -121.9358, "floodRisk": 25, "earthquakeRisk": 85, "wildfireRisk": 45, "description": {"flood": "Specific flood.", "earthquake": "Specific earthquake.", "wildfire": "Specific wildfire."}, "nriData": {"expectedAnnualLoss": "$2.4M", "socialVulnerability": "Relatively Low", "communityResilience": "Relatively High"}}
+                Today is May 13, 2025. Include only the JSON in your response, no other text. Ensure all values are present.`;
+            
+            fetch('https://ai.hackclub.com/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{ role: "user", content: prompt }] })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results-section').style.display = 'flex';
+                riskSummaryEl.style.display = 'block';
+                
+                if (map) {
+                    map.invalidateSize();
+                }
+
+                let riskData;
+                try {
+                    let jsonContent = '';
+                    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+                        jsonContent = data.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim();
+                        if (jsonContent.indexOf('{') !== 0) {
+                            const jsonStart = jsonContent.indexOf('{');
+                            const jsonEnd = jsonContent.lastIndexOf('}') + 1;
+                            if (jsonStart >= 0 && jsonEnd > jsonStart) jsonContent = jsonContent.substring(jsonStart, jsonEnd);
+                        }
+                        riskData = JSON.parse(jsonContent);
+                        if (!riskData.lat || !riskData.lng || !riskData.name || riskData.floodRisk === undefined) {
+                            throw new Error("API response missing essential fields.");
+                        }
+                    } else {
+                        throw new Error("Invalid API response structure.");
+                    }
+                    updateMap(zipCode, riskData);
+                    updateChart(riskData);
+                    updateRiskSummary(zipCode, riskData);
+                } catch (error) {
+                    console.error("Error processing API data:", error); 
+                    riskSummaryEl.innerHTML = `<h2>Error Processing Data</h2><p>Could not process the risk data for ZIP ${zipCode}: ${error.message}. Please check the console for more details.</p>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                riskSummaryEl.style.display = 'block';
+                console.error("Network or API fetch error:", error); 
+                riskSummaryEl.innerHTML = `<h2>Network Error</h2><p>Could not fetch risk data for ZIP ${zipCode}. Please check your connection or try again later. Check the console for more details.</p>`;
+            });
+        }
+        
+        function updateMap(zipCode, riskData) {
+            if (!map) { 
+                console.error("Map object not initialized in updateMap.");
+                return;
+            }
+            const lat = parseFloat(riskData.lat);
+            const lng = parseFloat(riskData.lng);
+            
+            map.invalidateSize(); 
+
+            if (isNaN(lat) || isNaN(lng)) {
+                 console.warn("Invalid coordinates for map update:", riskData.lat, riskData.lng, "Using default Bay Area view.");
+                map.setView([37.8, -122.4], 8); 
+                return;
+            }
+
+            if (currentMarker) map.removeLayer(currentMarker);
+            map.setView([lat, lng], 12);
+            currentMarker = L.marker([lat, lng])
+                .addTo(map)
+                .bindPopup(`<b>${riskData.name || `ZIP: ${zipCode}`}</b><br>ZIP: ${zipCode}`)
+                .openPopup();
+
+            map.eachLayer(layer => { if (layer instanceof L.Circle) map.removeLayer(layer); });
+            
+            const desc = riskData.description || {};
+            const createPopup = (h, d) => `<b>${h} Risk Zone</b><br>${d || "Description not available."}`;
+
+            if (riskData.floodRisk > 0) L.circle([lat, lng], { color: '#2166ac', fillColor: '#3388ff', fillOpacity: Math.max(0.1, (riskData.floodRisk||0)/150), radius: (riskData.floodRisk||0)*50+500 }).addTo(map).bindPopup(createPopup("Flood", desc.flood));
+            if (riskData.earthquakeRisk > 0) L.circle([lat, lng], { color: '#b2182b', fillColor: '#ff4444', fillOpacity: Math.max(0.1, (riskData.earthquakeRisk||0)/150), radius: (riskData.earthquakeRisk||0)*40+500 }).addTo(map).bindPopup(createPopup("Earthquake", desc.earthquake));
+            if (riskData.wildfireRisk > 0) L.circle([lat, lng], { color: '#d73027', fillColor: '#ff8800', fillOpacity: Math.max(0.1, (riskData.wildfireRisk||0)/150), radius: (riskData.wildfireRisk||0)*45+500 }).addTo(map).bindPopup(createPopup("Wildfire", desc.wildfire));
+        }
+        
+        function updateChart(riskData) {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            if (riskChart) riskChart.destroy();
+            riskChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Flood Risk', 'Earthquake Risk', 'Wildfire Risk'],
+                    datasets: [{
+                        label: 'Risk Level (0-100)',
+                        data: [riskData.floodRisk||0, riskData.earthquakeRisk||0, riskData.wildfireRisk||0],
+                        backgroundColor: ['rgba(51,136,255,0.7)','rgba(255,68,68,0.7)','rgba(255,136,0,0.7)'],
+                        borderColor: ['rgba(33,102,172,1)','rgba(178,24,43,1)','rgba(215,48,39,1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    // **** MODIFICATION HERE ****
+                    maintainAspectRatio: true, // Changed from false to true
+                    // **** END MODIFICATION ****
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100, 
+                            title: { display: true, text: 'Risk Level' } 
+                        } 
+                    },
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { 
+                            callbacks: { 
+                                label: ctx => `${ctx.dataset.label||''}: ${ctx.parsed.y}/100` 
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateRiskSummary(zipCode, riskData) {
+            const summaryEl = document.getElementById('riskSummary');
+            const getLvl = s => (s === undefined || s === null) ? "N/A" : (s >= 70 ? "High" : (s >= 30 ? "Medium" : "Low"));
+            
+            const nri = riskData.nriData || { expectedAnnualLoss:"N/A", socialVulnerability:"N/A", communityResilience:"N/A" };
+            const desc = riskData.description || { flood:"Not available.", earthquake:"Not available.", wildfire:"Not available." };
+
+            summaryEl.innerHTML = `
+                <h2>Risk Assessment for ${riskData.name || `ZIP ${zipCode}`}</h2>
+                <div class="risk-item">
+                    <h3>National Risk Index Snapshot</h3>
+                    <p><strong>Expected Annual Loss:</strong> ${nri.expectedAnnualLoss}</p>
+                    <p><strong>Social Vulnerability:</strong> ${nri.socialVulnerability}</p>
+                    <p><strong>Community Resilience:</strong> ${nri.communityResilience}</p>
+                </div>
+                <div class="risk-item">
+                    <h3>Flood Risk</h3>
+                    <p><span class="risk-level ${getLvl(riskData.floodRisk).toLowerCase()}">${getLvl(riskData.floodRisk)}</span> (${riskData.floodRisk||0}/100)</p>
+                    <p>${desc.flood}</p>
+                </div>
+                <div class="risk-item">
+                    <h3>Earthquake Risk</h3>
+                    <p><span class="risk-level ${getLvl(riskData.earthquakeRisk).toLowerCase()}">${getLvl(riskData.earthquakeRisk)}</span> (${riskData.earthquakeRisk||0}/100)</p>
+                    <p>${desc.earthquake}</p>
+                </div>
+                <div class="risk-item">
+                    <h3>Wildfire Risk</h3>
+                    <p><span class="risk-level ${getLvl(riskData.wildfireRisk).toLowerCase()}">${getLvl(riskData.wildfireRisk)}</span> (${riskData.wildfireRisk||0}/100)</p>
+                    <p>${desc.wildfire}</p>
+                </div>
+                <div class="risk-item" id="evacuationInfoSectionLocal">
+                    <h3>Evacuation &amp; Alerts</h3>
+                    <p id="evacuationMessageLocal"></p>
+                    <p><strong>Know Your Evacuation Zone:</strong> It's crucial to know your specific evacuation zone. Use official county links below.</p>
+                    <div id="evacuationZoneLinksLocal"></div>
+                    <p><strong>Stay Informed:</strong> Sign up for emergency alerts.</p>
+                    <p id="emergencyAlertLinkLocal"></p>
+                    <p class="small-print"><em>Evacuation zones and orders are by official services. Always follow their guidance.</em></p>
+                </div>
+                <p><em>Risk data sources include FEMA NRI, Cal Fire, USGS. Evacuation links are to official county resources. (Data Ref: ${document.querySelector('footer p:first-child').textContent.split('|')[0].trim()})</em></p>
+            `;
+            displayEvacuationInfo(zipCode, riskData.name); 
+        }
+
+        function displayEvacuationInfo(zipCode, locationName) {
+            const countyKey = getCountyFromZip(zipCode, locationName);
+            const countyInfo = countyKey ? countyEvacuationInfo[countyKey] : null;
+            
+            const evacMsgEl = document.getElementById('evacuationMessageLocal');
+            const zoneLinksEl = document.getElementById('evacuationZoneLinksLocal');
+            const alertLinkEl = document.getElementById('emergencyAlertLinkLocal');
+
+            if (!evacMsgEl || !zoneLinksEl || !alertLinkEl) return;
+
+            evacMsgEl.innerHTML = ''; zoneLinksEl.innerHTML = ''; alertLinkEl.innerHTML = '';
+            
+            if (countyInfo) {
+                evacMsgEl.innerHTML = `For <strong>${countyInfo.countyName}</strong>:`;
+                let linksHTML = '';
+                if (countyInfo.zoneSystemUrl && countyInfo.zoneSystemName) linksHTML += `<a href="${countyInfo.zoneSystemUrl}" target="_blank" rel="noopener noreferrer">Find Zone via ${countyInfo.zoneSystemName}</a>`;
+                if (countyInfo.additionalLinks) countyInfo.additionalLinks.forEach(l => { linksHTML += `<br><a href="${l.url}" target="_blank" rel="noopener noreferrer">${l.name}</a>`; });
+                
+                zoneLinksEl.innerHTML = (linksHTML===''&&countyInfo.evacInfoText) ? `<p>${countyInfo.evacInfoText}</p>` : (linksHTML==='' ? `<p>Check ${countyInfo.countyName} OES website.</p>` : linksHTML);
+                alertLinkEl.innerHTML = (countyInfo.alertSystemName&&countyInfo.alertSystemUrl) ? `Sign up for <a href="${countyInfo.alertSystemUrl}" target="_blank" rel="noopener noreferrer">${countyInfo.alertSystemName}</a>.` : `Check ${countyInfo.countyName} website for alerts.`;
+            } else {
+                evacMsgEl.innerHTML = "County not determined for ZIP " + zipCode + (locationName ? ` (${locationName})` : "") + ".";
+                zoneLinksEl.innerHTML = '<p>Check your county OES website for evacuation info. Start at <a href="https://www.caloes.ca.gov/county-emergency-management/" target="_blank" rel="noopener noreferrer">CalOES County list</a>.</p>';
+                alertLinkEl.innerHTML = 'Sign up for alerts via your local county/city.';
+            }
+        }
+    </script>
+</body>
+</html>
